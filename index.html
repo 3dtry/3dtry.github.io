@@ -6,21 +6,27 @@
 <title>Vascular atlas — 3D visualizations</title>
 <style>
   :root {
-    --bg: #0E141B;
-    --panel: #141C26;
-    --ink: #E9EEF4;
-    --muted: #9AAAB9;
-    --faint: #6B7B8C;
-    --artery: #D24A42;
-    --vein: #5B8DBE;
-    --line: #24303E;
+    --paper: #FBFAF6;
+    --panel: #F1EFE8;
+    --ink: #20272F;
+    --muted: #5D6874;
+    --faint: #939AA3;
+    --artery: #B23B32;
+    --vein: #3D6E9E;
+    --line: #E4E1D8;
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  html { background: var(--bg); }
+  html { background: var(--paper); }
+  #bg {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    display: block;
+  }
   body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     color: var(--ink);
-    line-height: 1.55;
+    line-height: 1.6;
     max-width: 46rem;
     margin: 0 auto;
     padding: 4.5rem 1.5rem 5rem;
@@ -31,9 +37,10 @@
   header { margin-bottom: 3rem; }
   h1 {
     font-size: clamp(2.1rem, 6vw, 3rem);
-    font-weight: 600;
+    font-weight: 700;
     letter-spacing: -0.01em;
     line-height: 1.15;
+    color: var(--ink);
   }
   .hero-sub {
     margin-top: 1rem;
@@ -59,9 +66,10 @@
     flex: none;
   }
   .group-label h2 {
-    font-size: 0.95rem;
-    font-weight: 600;
-    letter-spacing: 0.02em;
+    font-family: "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+    font-size: 1.05rem;
+    font-weight: 700;
+    letter-spacing: 0.01em;
   }
   .group-label .rule { height: 1px; background: var(--line); flex: 1; }
   .group-note { color: var(--faint); font-size: 0.88rem; margin: 0 0 0.6rem 1.55rem; }
@@ -80,7 +88,6 @@
     margin-left: 0.3rem;
     transition: background 0.18s ease, border-color 0.18s ease;
   }
-  .entry + .entry { border-top: 1px solid transparent; }
   .g-artery .entry:hover, .g-artery .entry:focus-visible { border-left-color: var(--artery); background: var(--panel); }
   .g-vein .entry:hover, .g-vein .entry:focus-visible { border-left-color: var(--vein); background: var(--panel); }
   .g-both .entry:hover, .g-both .entry:focus-visible { border-left-color: var(--faint); background: var(--panel); }
@@ -89,7 +96,7 @@
   .entry h3 {
     font-family: "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
     font-size: 1.18rem;
-    font-weight: 600;
+    font-weight: 700;
     letter-spacing: 0.01em;
   }
   .entry h3 .arrow {
@@ -134,6 +141,80 @@
 <meta name="ai-disclosure" content="ai-autonomous" ai-model="GLM-5.3-Flash" ai-provider="Thaura"><meta name="generator" content="Thaura (GLM-5.3-Flash)"></head>
 <body>
 
+<canvas id="bg" aria-hidden="true"></canvas>
+
+<script>
+(function () {
+  var canvas = document.getElementById('bg');
+  var ctx = canvas.getContext('2d');
+  var ARTERY = [178, 59, 50], VEIN = [61, 110, 158];
+
+  function draw() {
+    var w = window.innerWidth, h = window.innerHeight;
+    var dpr = window.devicePixelRatio || 1;
+    canvas.width = w * dpr; canvas.height = h * dpr;
+    canvas.style.width = w + 'px'; canvas.style.height = h + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+    ctx.lineCap = 'round';
+
+    // roots along the left and right edges and the bottom; vessels grow inward
+    var roots = [];
+    for (var i = 0; i < 4; i++) roots.push({ x: -20, y: h * (0.08 + 0.27 * i) + rnd(40), a: 0, dir: 1 });
+    for (i = 0; i < 4; i++) roots.push({ x: w + 20, y: h * (0.10 + 0.27 * i) + rnd(40), a: Math.PI, dir: -1 });
+    for (i = 0; i < 3; i++) roots.push({ x: w * (0.18 + 0.32 * i) + rnd(60), y: h + 20, a: -Math.PI / 2, dir: 1 });
+
+    var cx = w / 2, fadeW = Math.min(w * 0.34, 470);
+
+    function fade(x) { // keep the central text column quiet
+      var d = Math.abs(x - cx) / fadeW;
+      return Math.max(0.12, Math.min(1, d));
+    }
+
+    function rnd(n) { return (Math.random() - 0.5) * 2 * n; }
+
+    function grow(x, y, a, width, depth, hue) {
+      var steps = 6 + Math.floor(Math.random() * 6);
+      var len = (9 + Math.random() * 10) * (1 + width / 5);
+      for (var s = 0; s < steps; s++) {
+        a += rnd(0.16);
+        // gentle pull toward the page center so trees lean inward
+        var toward = Math.atan2(h * 0.42 - y, cx - x);
+        var da = toward - a;
+        a += da * 0.06;
+        var nx = x + Math.cos(a) * len, ny = y + Math.sin(a) * len;
+        if (nx < -60 || nx > w + 60 || ny < -60 || ny > h + 60) return;
+        var c = ARTERY.map(function (v, i) { return Math.round(v + (VEIN[i] - v) * hue); });
+        var alpha = 0.13 * fade((x + nx) / 2) * Math.min(1, width / 2.5);
+        ctx.strokeStyle = 'rgba(' + c.join(',') + ',' + alpha.toFixed(3) + ')';
+        ctx.lineWidth = Math.max(0.5, width);
+        ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(nx, ny); ctx.stroke();
+        x = nx; y = ny;
+        width = Math.max(0.45, width * 0.965);
+        // fork
+        if (depth > 0 && width > 0.6 && Math.random() < 0.09) {
+          grow(x, y, a + rnd(0.9), width * 0.62, depth - 1, Math.min(1, hue + 0.14));
+        }
+      }
+      if (depth > 0 && width > 0.55) grow(x, y, a, width * 0.66, depth - 1, Math.min(1, hue + 0.12));
+    }
+
+    roots.forEach(function (r) {
+      // roots from the left start arterial-red, from the right venous-blue
+      var hue = r.dir === 1 ? rnd(0.1) + 0.05 : 0.85 + rnd(0.1);
+      if (r.a === -Math.PI / 2) hue = Math.random();
+      grow(r.x, r.y, r.a + rnd(0.2), 2.6 + Math.random() * 1.6, 4, Math.min(1, Math.max(0, hue)));
+    });
+  }
+
+  var t;
+  window.addEventListener('resize', function () {
+    clearTimeout(t); t = setTimeout(draw, 200);
+  });
+  draw();
+})();
+</script>
+
 <header>
   <h1 class="display">Vascular atlas</h1>
   <p class="hero-sub">Three-dimensional visualizations of the heart, neck and brain vasculature.
@@ -143,15 +224,15 @@
   (scale 0.865, rotation 3.6°, median residual 1.2 mm).</p>
 
   <svg class="vessel" viewBox="0 0 640 34" preserveAspectRatio="none" aria-hidden="true">
-    <path d="M0 17 H 300" stroke="#D24A42" stroke-width="2.2" fill="none" stroke-linecap="round" opacity="0.85"/>
-    <path d="M300 17 C 340 17, 360 8, 400 6" stroke="#D24A42" stroke-width="1.6" fill="none" stroke-linecap="round" opacity="0.6"/>
-    <path d="M300 17 C 340 17, 360 27, 400 29" stroke="#D24A42" stroke-width="1.6" fill="none" stroke-linecap="round" opacity="0.6"/>
-    <path d="M300 17 C 380 17, 460 17, 640 17" stroke="#D24A42" stroke-width="2.2" fill="none" stroke-linecap="round"
+    <path d="M0 17 H 300" stroke="#B23B32" stroke-width="2.2" fill="none" stroke-linecap="round" opacity="0.9"/>
+    <path d="M300 17 C 340 17, 360 8, 400 6" stroke="#B23B32" stroke-width="1.6" fill="none" stroke-linecap="round" opacity="0.65"/>
+    <path d="M300 17 C 340 17, 360 27, 400 29" stroke="#B23B32" stroke-width="1.6" fill="none" stroke-linecap="round" opacity="0.65"/>
+    <path d="M300 17 C 380 17, 460 17, 640 17" stroke="#B23B32" stroke-width="2.2" fill="none" stroke-linecap="round"
           style="stroke: url(#g)"/>
     <defs>
       <linearGradient id="g" x1="0" y1="0" x2="1" y2="0">
-        <stop offset="0" stop-color="#D24A42"/>
-        <stop offset="1" stop-color="#5B8DBE"/>
+        <stop offset="0" stop-color="#B23B32"/>
+        <stop offset="1" stop-color="#3D6E9E"/>
       </linearGradient>
     </defs>
   </svg>
